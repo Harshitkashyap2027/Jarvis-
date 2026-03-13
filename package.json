@@ -1,0 +1,36 @@
+{
+  "name": "project-aether",
+  "version": "1.0.0",
+  "description": "Project A.E.T.H.E.R. — Advanced Environment for Task Handling and Executive Routing. A JARVIS-style local AI assistant with full OS control, voice interface, and a sci-fi web dashboard.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test tests/**/*.test.js"
+  },
+  "keywords": [
+    "jarvis",
+    "ai-assistant",
+    "voice-control",
+    "os-automation",
+    "dashboard"
+  ],
+  "author": "Harshitkashyap2027",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "openai": "^4.52.0",
+    "socket.io": "^4.7.5",
+    "systeminformation": "^5.22.11",
+    "@google/generative-ai": "^0.15.0",
+    "@anthropic-ai/sdk": "^0.27.0"
+  },
+  "optionalDependencies": {
+    "@jitsi/robotjs": "^0.6.13"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

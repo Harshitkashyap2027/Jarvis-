@@ -1,0 +1,351 @@
+/**
+ * controllers/fileManager.js
+ * High-speed file management: organise directories, scaffold projects,
+ * create/move/delete files, and search the filesystem.
+ */
+
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+
+/**
+ * File extension → destination folder mapping for the organiser.
+ */
+const EXTENSION_MAP = {
+  // Documents
+  '.pdf': 'Documents/PDFs',
+  '.doc': 'Documents/Word',
+  '.docx': 'Documents/Word',
+  '.xls': 'Documents/Excel',
+  '.xlsx': 'Documents/Excel',
+  '.ppt': 'Documents/PowerPoint',
+  '.pptx': 'Documents/PowerPoint',
+  '.txt': 'Documents/Text',
+  '.md': 'Documents/Markdown',
+  // Images
+  '.jpg': 'Images',
+  '.jpeg': 'Images',
+  '.png': 'Images',
+  '.gif': 'Images',
+  '.bmp': 'Images',
+  '.svg': 'Images',
+  '.webp': 'Images',
+  '.ico': 'Images',
+  // Videos
+  '.mp4': 'Videos',
+  '.mkv': 'Videos',
+  '.avi': 'Videos',
+  '.mov': 'Videos',
+  '.wmv': 'Videos',
+  '.flv': 'Videos',
+  // Audio
+  '.mp3': 'Audio',
+  '.wav': 'Audio',
+  '.flac': 'Audio',
+  '.aac': 'Audio',
+  '.ogg': 'Audio',
+  // Archives
+  '.zip': 'Archives',
+  '.rar': 'Archives',
+  '.tar': 'Archives',
+  '.gz': 'Archives',
+  '.7z': 'Archives',
+  // Executables / Installers
+  '.exe': 'Installers',
+  '.msi': 'Installers',
+  '.dmg': 'Installers',
+  '.pkg': 'Installers',
+  '.deb': 'Installers',
+  '.rpm': 'Installers',
+  '.sh': 'Scripts',
+  '.bat': 'Scripts',
+  // Code
+  '.js': 'Code',
+  '.ts': 'Code',
+  '.py': 'Code',
+  '.java': 'Code',
+  '.cpp': 'Code',
+  '.c': 'Code',
+  '.cs': 'Code',
+  '.html': 'Code',
+  '.css': 'Code',
+  '.json': 'Code',
+};
+
+/**
+ * Ensure a directory exists; create it recursively if not.
+ * @param {string} dirPath
+ */
+function ensureDir(dirPath) {
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true });
+  }
+}
+
+/**
+ * Organise a directory (e.g. Downloads) by moving files into
+ * categorised subdirectories. Also deletes installer files older
+ * than `maxAgeDays` days.
+ *
+ * @param {string} sourceDir - Directory to organise.
+ * @param {number} [maxAgeDays=30] - Delete installers older than this many days.
+ * @returns {{ moved: string[], deleted: string[], skipped: string[] }}
+ */
+function organiseDirectory(sourceDir, maxAgeDays = 30) {
+  if (!fs.existsSync(sourceDir)) {
+    throw new Error(`Directory does not exist: ${sourceDir}`);
+  }
+
+  const entries = fs.readdirSync(sourceDir, { withFileTypes: true });
+  const now = Date.now();
+  const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
+  const report = { moved: [], deleted: [], skipped: [] };
+
+  for (const entry of entries) {
+    if (!entry.isFile()) {
+      report.skipped.push(entry.name);
+      continue;
+    }
+
+    const ext = path.extname(entry.name).toLowerCase();
+    const srcPath = path.join(sourceDir, entry.name);
+    const stat = fs.statSync(srcPath);
+
+    // Delete old installers
+    if (['.exe', '.msi', '.dmg', '.pkg', '.deb', '.rpm'].includes(ext)) {
+      if (now - stat.mtimeMs > maxAgeMs) {
+        fs.unlinkSync(srcPath);
+        report.deleted.push(entry.name);
+        continue;
+      }
+    }
+
+    const destSubfolder = EXTENSION_MAP[ext];
+    if (!destSubfolder) {
+      report.skipped.push(entry.name);
+      continue;
+    }
+
+    const destDir = path.join(sourceDir, destSubfolder);
+    ensureDir(destDir);
+
+    let destPath = path.join(destDir, entry.name);
+    // Avoid overwriting by appending a counter
+    let counter = 1;
+    while (fs.existsSync(destPath)) {
+      const base = path.basename(entry.name, ext);
+      destPath = path.join(destDir, `${base}_${counter}${ext}`);
+      counter++;
+    }
+
+    fs.renameSync(srcPath, destPath);
+    report.moved.push(`${entry.name} → ${destSubfolder}`);
+  }
+
+  return report;
+}
+
+/**
+ * Create a deep folder/file scaffold from a template definition.
+ * @param {string} basePath - Root directory.
+ * @param {Object} template - Nested object: keys are names, values are
+ *   either null (directory) or a string (file content).
+ */
+function createScaffold(basePath, template) {
+  ensureDir(basePath);
+  for (const [name, content] of Object.entries(template)) {
+    const fullPath = path.join(basePath, name);
+    if (content === null || (typeof content === 'object' && !Array.isArray(content))) {
+      // Recurse for nested dirs
+      createScaffold(fullPath, content || {});
+    } else {
+      ensureDir(path.dirname(fullPath));
+      fs.writeFileSync(fullPath, content, 'utf8');
+    }
+  }
+}
+
+/**
+ * Scaffold a new React component (JSX + CSS module).
+ * @param {string} projectSrc - Path to project's src directory.
+ * @param {string} componentName - PascalCase component name.
+ * @returns {{ jsx: string, css: string }}
+ */
+function scaffoldReactComponent(projectSrc, componentName) {
+  const componentsDir = path.join(projectSrc, 'components', componentName);
+  ensureDir(componentsDir);
+
+  const jsxContent = `import React from 'react';
+import styles from './${componentName}.module.css';
+
+/**
+ * ${componentName} Component
+ * Auto-generated by Project A.E.T.H.E.R.
+ */
+const ${componentName} = () => {
+  return (
+    <div className={styles.container}>
+      <h2>${componentName}</h2>
+    </div>
+  );
+};
+
+export default ${componentName};
+`;
+
+  const cssContent = `.container {
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+}
+`;
+
+  const jsxPath = path.join(componentsDir, `${componentName}.jsx`);
+  const cssPath = path.join(componentsDir, `${componentName}.module.css`);
+
+  fs.writeFileSync(jsxPath, jsxContent, 'utf8');
+  fs.writeFileSync(cssPath, cssContent, 'utf8');
+
+  return { jsx: jsxPath, css: cssPath };
+}
+
+/**
+ * Scaffold a complete Node.js + Express project structure.
+ * @param {string} projectPath - Root directory for the new project.
+ * @param {string} projectName - Project name for package.json.
+ */
+function scaffoldNodeProject(projectPath, projectName) {
+  const template = {
+    'src': {
+      'index.js': `'use strict';\n\nconst express = require('express');\nconst app = express();\nconst PORT = process.env.PORT || 3000;\n\napp.get('/', (req, res) => res.send('Hello from ${projectName}'));\n\napp.listen(PORT, () => console.log(\`Server running on port \${PORT}\`));\n`,
+      'routes': {
+        'index.js': `'use strict';\nconst router = require('express').Router();\nrouter.get('/', (req, res) => res.json({ status: 'ok' }));\nmodule.exports = router;\n`,
+      },
+      'middleware': {},
+      'controllers': {},
+      'models': {},
+    },
+    '.env.example': 'PORT=3000\nNODE_ENV=development\n',
+    '.gitignore': 'node_modules/\n.env\n',
+    'README.md': `# ${projectName}\n\nGenerated by Project A.E.T.H.E.R.\n`,
+    'package.json': JSON.stringify(
+      {
+        name: projectName.toLowerCase().replace(/\s+/g, '-'),
+        version: '1.0.0',
+        description: '',
+        main: 'src/index.js',
+        scripts: { start: 'node src/index.js', dev: 'node --watch src/index.js' },
+        dependencies: { express: '^4.19.2' },
+      },
+      null,
+      2
+    ) + '\n',
+  };
+
+  createScaffold(projectPath, template);
+  return projectPath;
+}
+
+/**
+ * Read the contents of a file.
+ * @param {string} filePath
+ */
+function readFile(filePath) {
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`File not found: ${filePath}`);
+  }
+  return fs.readFileSync(filePath, 'utf8');
+}
+
+/**
+ * Write content to a file (creates parent dirs if needed).
+ * @param {string} filePath
+ * @param {string} content
+ */
+function writeFile(filePath, content) {
+  ensureDir(path.dirname(filePath));
+  fs.writeFileSync(filePath, content, 'utf8');
+}
+
+/**
+ * Delete a file or directory recursively.
+ * @param {string} targetPath
+ */
+function deletePath(targetPath) {
+  if (!fs.existsSync(targetPath)) {
+    throw new Error(`Path not found: ${targetPath}`);
+  }
+  fs.rmSync(targetPath, { recursive: true, force: true });
+}
+
+/**
+ * Move / rename a file or directory.
+ * @param {string} srcPath
+ * @param {string} destPath
+ */
+function movePath(srcPath, destPath) {
+  if (!fs.existsSync(srcPath)) {
+    throw new Error(`Source not found: ${srcPath}`);
+  }
+  ensureDir(path.dirname(destPath));
+  fs.renameSync(srcPath, destPath);
+}
+
+/**
+ * List files in a directory (non-recursive, one level deep).
+ * @param {string} dirPath
+ * @returns {Array<{name, type, size, modified}>}
+ */
+function listDirectory(dirPath) {
+  if (!fs.existsSync(dirPath)) {
+    throw new Error(`Directory not found: ${dirPath}`);
+  }
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  return entries.map((entry) => {
+    const fullPath = path.join(dirPath, entry.name);
+    const stat = fs.statSync(fullPath);
+    return {
+      name: entry.name,
+      type: entry.isDirectory() ? 'directory' : 'file',
+      size: stat.size,
+      modified: stat.mtime.toISOString(),
+    };
+  });
+}
+
+/**
+ * Recursively search for files matching a pattern (simple substring match).
+ * @param {string} rootDir
+ * @param {string} pattern
+ * @param {string[]} [results=[]]
+ * @returns {string[]}
+ */
+function searchFiles(rootDir, pattern, results = []) {
+  if (!fs.existsSync(rootDir)) return results;
+  const entries = fs.readdirSync(rootDir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(rootDir, entry.name);
+    if (entry.name.toLowerCase().includes(pattern.toLowerCase())) {
+      results.push(fullPath);
+    }
+    if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
+      searchFiles(fullPath, pattern, results);
+    }
+  }
+  return results;
+}
+
+module.exports = {
+  organiseDirectory,
+  createScaffold,
+  scaffoldReactComponent,
+  scaffoldNodeProject,
+  readFile,
+  writeFile,
+  deletePath,
+  movePath,
+  listDirectory,
+  searchFiles,
+  ensureDir,
+};

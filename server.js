@@ -281,10 +281,15 @@ const telemetryInterval = telemetry.startTelemetryLoop(io, 2000);
 
 // ─── Start Server ────────────────────────────────────────────────────────────
 server.listen(PORT, HOST, () => {
-  console.log(`\n  ╔══════════════════════════════════════════╗`);
-  console.log(`  ║    Project A.E.T.H.E.R. is ONLINE        ║`);
-  console.log(`  ║    Dashboard: http://${HOST}:${PORT}    ║`);
-  console.log(`  ╚══════════════════════════════════════════╝\n`);
+  const url = `http://${HOST}:${PORT}`;
+  const label = `  Dashboard: ${url}`;
+  const width = Math.max(44, label.length + 4);
+  const bar   = '═'.repeat(width);
+  const pad   = (s) => s + ' '.repeat(width - s.length + 1) + '║';
+  console.log(`\n  ╔${bar}╗`);
+  console.log(`  ║${pad('  Project A.E.T.H.E.R. is ONLINE')}`);
+  console.log(`  ║${pad(label)}`);
+  console.log(`  ╚${bar}╝\n`);
 });
 
 // ─── Graceful Shutdown ────────────────────────────────────────────────────────

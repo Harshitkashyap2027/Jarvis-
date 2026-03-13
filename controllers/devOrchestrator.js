@@ -99,12 +99,28 @@ async function gitStatus(repoDir) {
 
 /**
  * Stage all changes and commit with a message.
+ * The message is passed via the GIT_COMMIT_MSG environment variable to avoid
+ * shell injection — no shell escaping of the message content is needed.
  * @param {string} repoDir
  * @param {string} message - Commit message.
  */
 async function gitCommit(repoDir, message) {
   await runCommand('git add -A', { cwd: repoDir });
-  return runCommand(`git commit -m "${message.replace(/"/g, '\\"')}"`, { cwd: repoDir });
+  // Pass the message through an env var so the shell never interpolates it.
+  return new Promise((resolve, reject) => {
+    const { exec } = require('child_process');
+    exec(
+      'git commit -m "$GIT_COMMIT_MSG"',
+      { cwd: repoDir, timeout: 60000, env: { ...process.env, GIT_COMMIT_MSG: message } },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject(new Error(`git commit failed: ${error.message}\n${stderr}`));
+          return;
+        }
+        resolve({ stdout: stdout.trim(), stderr: stderr.trim() });
+      }
+    );
+  });
 }
 
 /**
